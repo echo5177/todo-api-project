@@ -1,28 +1,42 @@
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from typing import Optional
+
+from fastapi import FastAPI, HTTPException, Query
+from pydantic import BaseModel, Field as PydanticField
+from sqlmodel import Field, Session, SQLModel, create_engine, select
 
 app = FastAPI(title="My Todo API")
 
-tasks = []
-next_id = 1
+sqlite_file_name = "database.db"
+sqlite_url = f"sqlite:///{sqlite_file_name}"
+connect_args = {"check_same_thread": False}
+engine = create_engine(sqlite_url, connect_args=connect_args)
+
+
+class Task(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    title: str
+    description: str = ""
+    done: bool = False
 
 
 class TaskCreate(BaseModel):
-    title: str = Field(min_length=1, max_length=50)
+    title: str = PydanticField(min_length=1, max_length=50)
     description: str = ""
 
 
 class TaskUpdate(BaseModel):
-    title: str | None = Field(default=None, min_length=1, max_length=50)
-    description: str | None = None
-    done: bool | None = None
+    title: Optional[str] = PydanticField(default=None, min_length=1, max_length=50)
+    description: Optional[str] = None
+    done: Optional[bool] = None
 
 
-def find_task(task_id: int):
-    for task in tasks:
-        if task["id"] == task_id:
-            return task
-    return None
+def create_db_and_tables():
+    SQLModel.metadata.create_all(engine)
+
+
+@app.on_event("startup")
+def on_startup():
+    create_db_and_tables()
 
 
 @app.get("/")
@@ -31,59 +45,155 @@ def read_root():
 
 
 @app.get("/tasks")
-def list_tasks(done: bool | None = None):
-    if done is None:
+def list_tasks(done: Optional[bool] = Query(default=None)):
+    with Session(engine) as session:
+        statement = select(Task)
+        if done is not None:
+            statement = statement.where(Task.done == done)
+        tasks = session.exec(statement).all()
         return tasks
-    return [task for task in tasks if task["done"] == done]
 
 
 @app.get("/tasks/{task_id}")
 def get_task(task_id: int):
-    task = find_task(task_id)
-    if task is None:
-        raise HTTPException(status_code=404, detail="Task not found")
-    return task
+    with Session(engine) as session:
+        task = session.get(Task, task_id)
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return task
 
 
 @app.post("/tasks")
 def create_task(task: TaskCreate):
-    global next_id
-
-    new_task = {
-        "id": next_id,
-        "title": task.title,
-        "description": task.description,
-        "done": False
-    }
-    tasks.append(new_task)
-    next_id += 1
-    return new_task
+    with Session(engine) as session:
+        db_task = Task(title=task.title, description=task.description)
+        session.add(db_task)
+        session.commit()
+        session.refresh(db_task)
+        return db_task
 
 
 @app.patch("/tasks/{task_id}")
 def update_task(task_id: int, task_update: TaskUpdate):
-    task = find_task(task_id)
-    if task is None:
-        raise HTTPException(status_code=404, detail="Task not found")
+    with Session(engine) as session:
+        task = session.get(Task, task_id)
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
 
-    if task_update.title is not None:
-        task["title"] = task_update.title
-    if task_update.description is not None:
-        task["description"] = task_update.description
-    if task_update.done is not None:
-        task["done"] = task_update.done
+        if task_update.title is not None:
+            task.title = task_update.title
+        if task_update.description is not None:
+            task.description = task_update.description
+        if task_update.done is not None:
+            task.done = task_update.done
 
-    return task
+        session.add(task)
+        session.commit()
+        session.refresh(task)
+        return task
 
 
 @app.delete("/tasks/{task_id}")
 def delete_task(task_id: int):
-    task = find_task(task_id)
-    if task is None:
-        raise HTTPException(status_code=404, detail="Task not found")
+    with Session(engine) as session:
+        task = session.get(Task, task_id)
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
 
-    tasks.remove(task)
-    return {"message": "Task deleted successfully"}
+        session.delete(task)
+        session.commit()
+        return {"message": "Task deleted successfully"}
+
+
+
+
+
+# from fastapi import FastAPI, HTTPException
+# from pydantic import BaseModel, Field
+
+# app = FastAPI(title="My Todo API")
+
+# tasks = []
+# next_id = 1
+
+
+# class TaskCreate(BaseModel):
+#     title: str = Field(min_length=1, max_length=50)
+#     description: str = ""
+
+
+# class TaskUpdate(BaseModel):
+#     title: str | None = Field(default=None, min_length=1, max_length=50)
+#     description: str | None = None
+#     done: bool | None = None
+
+
+# def find_task(task_id: int):
+#     for task in tasks:
+#         if task["id"] == task_id:
+#             return task
+#     return None
+
+
+# @app.get("/")
+# def read_root():
+#     return {"message": "Todo API is running"}
+
+
+# @app.get("/tasks")
+# def list_tasks(done: bool | None = None):
+#     if done is None:
+#         return tasks
+#     return [task for task in tasks if task["done"] == done]
+
+
+# @app.get("/tasks/{task_id}")
+# def get_task(task_id: int):
+#     task = find_task(task_id)
+#     if task is None:
+#         raise HTTPException(status_code=404, detail="Task not found")
+#     return task
+
+
+# @app.post("/tasks")
+# def create_task(task: TaskCreate):
+#     global next_id
+
+#     new_task = {
+#         "id": next_id,
+#         "title": task.title,
+#         "description": task.description,
+#         "done": False
+#     }
+#     tasks.append(new_task)
+#     next_id += 1
+#     return new_task
+
+
+# @app.patch("/tasks/{task_id}")
+# def update_task(task_id: int, task_update: TaskUpdate):
+#     task = find_task(task_id)
+#     if task is None:
+#         raise HTTPException(status_code=404, detail="Task not found")
+
+#     if task_update.title is not None:
+#         task["title"] = task_update.title
+#     if task_update.description is not None:
+#         task["description"] = task_update.description
+#     if task_update.done is not None:
+#         task["done"] = task_update.done
+
+#     return task
+
+
+# @app.delete("/tasks/{task_id}")
+# def delete_task(task_id: int):
+#     task = find_task(task_id)
+#     if task is None:
+#         raise HTTPException(status_code=404, detail="Task not found")
+
+#     tasks.remove(task)
+#     return {"message": "Task deleted successfully"}
 
 
 
