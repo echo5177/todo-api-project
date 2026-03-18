@@ -1,58 +1,18 @@
-from typing import Optional, Annotated
+from typing import Annotated, Optional
 
-from fastapi import Depends, FastAPI, HTTPException, Query
-from pydantic import BaseModel, Field as PydanticField
-from sqlmodel import Field, Session, SQLModel, create_engine, select
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlmodel import Session, select
 
-app = FastAPI(title="My Todo API")
+from app.database import get_session
+from app.models import Task
+from app.schemas import TaskCreate, TaskUpdate
 
-sqlite_file_name = "database.db"
-sqlite_url = f"sqlite:///{sqlite_file_name}"
-connect_args = {"check_same_thread": False}
-engine = create_engine(sqlite_url, connect_args=connect_args)
-
-
-class Task(SQLModel, table=True):
-    id: Optional[int] = Field(default=None, primary_key=True)
-    title: str
-    description: str = ""
-    done: bool = False
-
-
-class TaskCreate(BaseModel):
-    title: str = PydanticField(min_length=1, max_length=50)
-    description: str = ""
-
-
-class TaskUpdate(BaseModel):
-    title: Optional[str] = PydanticField(default=None, min_length=1, max_length=50)
-    description: Optional[str] = None
-    done: Optional[bool] = None
-
-
-def create_db_and_tables():
-    SQLModel.metadata.create_all(engine)
-
-
-def get_session():
-    with Session(engine) as session:
-        yield session
-
+router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 SessionDep = Annotated[Session, Depends(get_session)]
 
 
-@app.on_event("startup")
-def on_startup():
-    create_db_and_tables()
-
-
-@app.get("/")
-def read_root():
-    return {"message": "Todo API is running"}
-
-
-@app.get("/tasks")
+@router.get("")
 def list_tasks(session: SessionDep, done: Optional[bool] = Query(default=None)):
     statement = select(Task)
     if done is not None:
@@ -61,7 +21,7 @@ def list_tasks(session: SessionDep, done: Optional[bool] = Query(default=None)):
     return tasks
 
 
-@app.get("/tasks/{task_id}")
+@router.get("/{task_id}")
 def get_task(task_id: int, session: SessionDep):
     task = session.get(Task, task_id)
     if task is None:
@@ -69,7 +29,7 @@ def get_task(task_id: int, session: SessionDep):
     return task
 
 
-@app.post("/tasks")
+@router.post("")
 def create_task(task: TaskCreate, session: SessionDep):
     db_task = Task(title=task.title, description=task.description)
     session.add(db_task)
@@ -78,7 +38,7 @@ def create_task(task: TaskCreate, session: SessionDep):
     return db_task
 
 
-@app.patch("/tasks/{task_id}")
+@router.patch("/{task_id}")
 def update_task(task_id: int, task_update: TaskUpdate, session: SessionDep):
     task = session.get(Task, task_id)
     if task is None:
@@ -97,7 +57,7 @@ def update_task(task_id: int, task_update: TaskUpdate, session: SessionDep):
     return task
 
 
-@app.delete("/tasks/{task_id}")
+@router.delete("/{task_id}")
 def delete_task(task_id: int, session: SessionDep):
     task = session.get(Task, task_id)
     if task is None:
