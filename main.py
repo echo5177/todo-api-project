@@ -1,7 +1,8 @@
-from typing import Optional, Annotated
+from typing import Annotated, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query
-from pydantic import BaseModel, Field as PydanticField
+from pydantic import BaseModel
+from pydantic import Field as PydanticField
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
 app = FastAPI(title="My Todo API")

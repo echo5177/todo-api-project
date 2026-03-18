@@ -34,3 +34,22 @@ Database
 --------
 
 This project uses SQLite with SQLModel.
+
+## Install dependencies
+
+```bash
+python -m pip install -r requirements.txt
+```
+
+## Run tests
+
+```bash
+python -m pytest
+```
+
+## Lint and format
+
+```bash
+ruff check .
+ruff format .
+```

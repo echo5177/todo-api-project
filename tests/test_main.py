@@ -1,9 +1,8 @@
 from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, create_engine
 
-from app.main import app
 from app.database import get_session
-
+from app.main import app
 
 sqlite_url = "sqlite:///test_database.db"
 connect_args = {"check_same_thread": False}
@@ -29,8 +28,7 @@ def setup_function():
 
 def test_create_task():
     response = client.post(
-        "/tasks",
-        json={"title": "Test task", "description": "Testing create"}
+        "/tasks", json={"title": "Test task", "description": "Testing create"}
     )
     assert response.status_code == 200
     data = response.json()
@@ -52,8 +50,7 @@ def test_list_tasks():
 
 def test_get_task():
     create_response = client.post(
-        "/tasks",
-        json={"title": "Read book", "description": "Chapter 1"}
+        "/tasks", json={"title": "Read book", "description": "Chapter 1"}
     )
     task_id = create_response.json()["id"]
 
@@ -65,8 +62,7 @@ def test_get_task():
 
 def test_update_task_done():
     create_response = client.post(
-        "/tasks",
-        json={"title": "Finish homework", "description": "Math"}
+        "/tasks", json={"title": "Finish homework", "description": "Math"}
     )
     task_id = create_response.json()["id"]
 
@@ -78,8 +74,7 @@ def test_update_task_done():
 
 def test_delete_task():
     create_response = client.post(
-        "/tasks",
-        json={"title": "Delete me", "description": "Temporary"}
+        "/tasks", json={"title": "Delete me", "description": "Temporary"}
     )
     task_id = create_response.json()["id"]
 
