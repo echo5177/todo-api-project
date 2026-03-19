@@ -1,9 +1,11 @@
+from datetime import date
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 
 from app.database import get_session
+from app.enums import PriorityLevel
 from app.models import Task
 from app.schemas import TaskCreate, TaskUpdate
 
@@ -13,10 +15,23 @@ SessionDep = Annotated[Session, Depends(get_session)]
 
 
 @router.get("")
-def list_tasks(session: SessionDep, done: Optional[bool] = Query(default=None)):
+def list_tasks(
+    session: SessionDep,
+    done: Optional[bool] = Query(default=None),
+    priority: Optional[PriorityLevel] = Query(default=None),
+    due_before: Optional[date] = Query(default=None),
+):
     statement = select(Task)
+
     if done is not None:
         statement = statement.where(Task.done == done)
+
+    if priority is not None:
+        statement = statement.where(Task.priority == priority)
+
+    if due_before is not None:
+        statement = statement.where(Task.due_date <= due_before)
+
     tasks = session.exec(statement).all()
     return tasks
 
@@ -31,7 +46,12 @@ def get_task(task_id: int, session: SessionDep):
 
 @router.post("")
 def create_task(task: TaskCreate, session: SessionDep):
-    db_task = Task(title=task.title, description=task.description)
+    db_task = Task(
+        title=task.title,
+        description=task.description,
+        priority=task.priority,
+        due_date=task.due_date,
+    )
     session.add(db_task)
     session.commit()
     session.refresh(db_task)
@@ -50,6 +70,10 @@ def update_task(task_id: int, task_update: TaskUpdate, session: SessionDep):
         task.description = task_update.description
     if task_update.done is not None:
         task.done = task_update.done
+    if task_update.priority is not None:
+        task.priority = task_update.priority
+    if task_update.due_date is not None:
+        task.due_date = task_update.due_date
 
     session.add(task)
     session.commit()

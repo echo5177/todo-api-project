@@ -15,7 +15,6 @@ def override_get_session():
 
 
 app.dependency_overrides[get_session] = override_get_session
-
 SQLModel.metadata.create_all(engine)
 
 client = TestClient(app)
@@ -28,19 +27,43 @@ def setup_function():
 
 def test_create_task():
     response = client.post(
-        "/tasks", json={"title": "Test task", "description": "Testing create"}
+        "/tasks",
+        json={
+            "title": "Test task",
+            "description": "Testing create",
+            "priority": "high",
+            "due_date": "2026-03-30",
+        },
     )
     assert response.status_code == 200
     data = response.json()
     assert data["title"] == "Test task"
     assert data["description"] == "Testing create"
     assert data["done"] is False
+    assert data["priority"] == "high"
+    assert data["due_date"] == "2026-03-30"
     assert "id" in data
 
 
 def test_list_tasks():
-    client.post("/tasks", json={"title": "Task 1", "description": "A"})
-    client.post("/tasks", json={"title": "Task 2", "description": "B"})
+    client.post(
+        "/tasks",
+        json={
+            "title": "Task 1",
+            "description": "A",
+            "priority": "low",
+            "due_date": "2026-03-28",
+        },
+    )
+    client.post(
+        "/tasks",
+        json={
+            "title": "Task 2",
+            "description": "B",
+            "priority": "high",
+            "due_date": "2026-03-20",
+        },
+    )
 
     response = client.get("/tasks")
     assert response.status_code == 200
@@ -50,7 +73,13 @@ def test_list_tasks():
 
 def test_get_task():
     create_response = client.post(
-        "/tasks", json={"title": "Read book", "description": "Chapter 1"}
+        "/tasks",
+        json={
+            "title": "Read book",
+            "description": "Chapter 1",
+            "priority": "medium",
+            "due_date": "2026-03-26",
+        },
     )
     task_id = create_response.json()["id"]
 
@@ -58,23 +87,40 @@ def test_get_task():
     assert response.status_code == 200
     data = response.json()
     assert data["title"] == "Read book"
+    assert data["priority"] == "medium"
 
 
-def test_update_task_done():
+def test_update_task_done_and_priority():
     create_response = client.post(
-        "/tasks", json={"title": "Finish homework", "description": "Math"}
+        "/tasks",
+        json={
+            "title": "Finish homework",
+            "description": "Math",
+            "priority": "low",
+            "due_date": "2026-03-29",
+        },
     )
     task_id = create_response.json()["id"]
 
-    response = client.patch(f"/tasks/{task_id}", json={"done": True})
+    response = client.patch(
+        f"/tasks/{task_id}",
+        json={"done": True, "priority": "high"},
+    )
     assert response.status_code == 200
     data = response.json()
     assert data["done"] is True
+    assert data["priority"] == "high"
 
 
 def test_delete_task():
     create_response = client.post(
-        "/tasks", json={"title": "Delete me", "description": "Temporary"}
+        "/tasks",
+        json={
+            "title": "Delete me",
+            "description": "Temporary",
+            "priority": "medium",
+            "due_date": "2026-03-31",
+        },
     )
     task_id = create_response.json()["id"]
 
@@ -83,3 +129,57 @@ def test_delete_task():
 
     get_response = client.get(f"/tasks/{task_id}")
     assert get_response.status_code == 404
+
+
+def test_filter_by_priority():
+    client.post(
+        "/tasks",
+        json={
+            "title": "Low task",
+            "description": "Easy",
+            "priority": "low",
+            "due_date": "2026-03-28",
+        },
+    )
+    client.post(
+        "/tasks",
+        json={
+            "title": "High task",
+            "description": "Urgent",
+            "priority": "high",
+            "due_date": "2026-03-20",
+        },
+    )
+
+    response = client.get("/tasks?priority=high")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["title"] == "High task"
+    assert data[0]["priority"] == "high"
+
+
+def test_invalid_priority_should_fail():
+    response = client.post(
+        "/tasks",
+        json={
+            "title": "Bad priority",
+            "description": "Wrong value",
+            "priority": "urgent",
+            "due_date": "2026-03-28",
+        },
+    )
+    assert response.status_code == 422
+
+
+def test_invalid_due_date_should_fail():
+    response = client.post(
+        "/tasks",
+        json={
+            "title": "Bad date",
+            "description": "Wrong date format",
+            "priority": "medium",
+            "due_date": "2026/03/28",
+        },
+    )
+    assert response.status_code == 422

@@ -53,3 +53,15 @@ python -m pytest
 ruff check .
 ruff format .
 ```
+
+## Current Features
+
+- Create a task
+- List tasks
+- Get one task by id
+- Update a task
+- Delete a task
+- Filter tasks by done status
+- Filter tasks by priority
+- Support task priority: low / medium / high
+- Support optional due date
