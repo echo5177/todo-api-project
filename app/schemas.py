@@ -1,7 +1,7 @@
 from datetime import date
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 from app.enums import PriorityLevel
 
@@ -19,3 +19,25 @@ class TaskUpdate(BaseModel):
     done: Optional[bool] = None
     priority: Optional[PriorityLevel] = None
     due_date: Optional[date] = None
+
+
+class UserCreate(BaseModel):
+    email: EmailStr
+    username: str = Field(min_length=3, max_length=20)
+    password: str = Field(min_length=6, max_length=100)
+
+
+class UserRead(BaseModel):
+    id: int
+    email: EmailStr
+    username: str
+    is_active: bool
+
+
+class Token(BaseModel):
+    access_token: str
+    token_type: str
+
+
+class TokenData(BaseModel):
+    username: str | None = None

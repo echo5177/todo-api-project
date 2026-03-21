@@ -5,23 +5,33 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
 
 from app.database import get_session
+from app.dependencies import get_current_user
 from app.enums import PriorityLevel
-from app.models import Task
+from app.models import Task, User
 from app.schemas import TaskCreate, TaskUpdate
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 SessionDep = Annotated[Session, Depends(get_session)]
+CurrentUserDep = Annotated[User, Depends(get_current_user)]
+
+
+def get_user_task_or_404(session: Session, current_user: User, task_id: int) -> Task:
+    task = session.get(Task, task_id)
+    if task is None or task.owner_id != current_user.id:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
 
 
 @router.get("")
 def list_tasks(
     session: SessionDep,
+    current_user: CurrentUserDep,
     done: Optional[bool] = Query(default=None),
     priority: Optional[PriorityLevel] = Query(default=None),
     due_before: Optional[date] = Query(default=None),
 ):
-    statement = select(Task)
+    statement = select(Task).where(Task.owner_id == current_user.id)
 
     if done is not None:
         statement = statement.where(Task.done == done)
@@ -37,20 +47,19 @@ def list_tasks(
 
 
 @router.get("/{task_id}")
-def get_task(task_id: int, session: SessionDep):
-    task = session.get(Task, task_id)
-    if task is None:
-        raise HTTPException(status_code=404, detail="Task not found")
+def get_task(task_id: int, session: SessionDep, current_user: CurrentUserDep):
+    task = get_user_task_or_404(session, current_user, task_id)
     return task
 
 
 @router.post("")
-def create_task(task: TaskCreate, session: SessionDep):
+def create_task(task: TaskCreate, session: SessionDep, current_user: CurrentUserDep):
     db_task = Task(
         title=task.title,
         description=task.description,
         priority=task.priority,
         due_date=task.due_date,
+        owner_id=current_user.id,
     )
     session.add(db_task)
     session.commit()
@@ -59,10 +68,13 @@ def create_task(task: TaskCreate, session: SessionDep):
 
 
 @router.patch("/{task_id}")
-def update_task(task_id: int, task_update: TaskUpdate, session: SessionDep):
-    task = session.get(Task, task_id)
-    if task is None:
-        raise HTTPException(status_code=404, detail="Task not found")
+def update_task(
+    task_id: int,
+    task_update: TaskUpdate,
+    session: SessionDep,
+    current_user: CurrentUserDep,
+):
+    task = get_user_task_or_404(session, current_user, task_id)
 
     if task_update.title is not None:
         task.title = task_update.title
@@ -82,10 +94,8 @@ def update_task(task_id: int, task_update: TaskUpdate, session: SessionDep):
 
 
 @router.delete("/{task_id}")
-def delete_task(task_id: int, session: SessionDep):
-    task = session.get(Task, task_id)
-    if task is None:
-        raise HTTPException(status_code=404, detail="Task not found")
+def delete_task(task_id: int, session: SessionDep, current_user: CurrentUserDep):
+    task = get_user_task_or_404(session, current_user, task_id)
 
     session.delete(task)
     session.commit()
