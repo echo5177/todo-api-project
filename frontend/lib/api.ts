@@ -2,6 +2,7 @@ const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000";
 
 export type PriorityLevel = "low" | "medium" | "high";
+export type DoneFilter = "all" | "pending" | "done";
 
 export type Task = {
   id: number;
@@ -65,8 +66,36 @@ export async function getCurrentUser(token: string): Promise<User> {
   return handleResponse(response);
 }
 
-export async function getTasks(token: string): Promise<Task[]> {
-  const response = await fetch(`${API_BASE_URL}/tasks`, {
+export async function getTasks(
+  token: string,
+  filters?: {
+    done?: DoneFilter;
+    priority?: "" | PriorityLevel;
+    due_before?: string;
+  }
+): Promise<Task[]> {
+  const query = new URLSearchParams();
+
+  if (filters?.done === "done") {
+    query.append("done", "true");
+  } else if (filters?.done === "pending") {
+    query.append("done", "false");
+  }
+
+  if (filters?.priority) {
+    query.append("priority", filters.priority);
+  }
+
+  if (filters?.due_before) {
+    query.append("due_before", filters.due_before);
+  }
+
+  const queryString = query.toString();
+  const url = queryString
+    ? `${API_BASE_URL}/tasks?${queryString}`
+    : `${API_BASE_URL}/tasks`;
+
+  const response = await fetch(url, {
     headers: {
       Authorization: `Bearer ${token}`,
     },

@@ -9,6 +9,7 @@ import {
   getCurrentUser,
   getTasks,
   updateTask,
+  type DoneFilter,
   type PriorityLevel,
   type Task,
   type User,
@@ -26,8 +27,19 @@ export default function TasksPage() {
   const [priority, setPriority] = useState<PriorityLevel>("medium");
   const [dueDate, setDueDate] = useState("");
 
+  const [doneFilter, setDoneFilter] = useState<DoneFilter>("all");
+  const [priorityFilter, setPriorityFilter] = useState<"" | PriorityLevel>("");
+  const [dueBeforeFilter, setDueBeforeFilter] = useState("");
+
+  const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editPriority, setEditPriority] = useState<PriorityLevel>("medium");
+  const [editDueDate, setEditDueDate] = useState("");
+
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
@@ -70,6 +82,32 @@ export default function TasksPage() {
     }
   }
 
+  async function refreshTasks(currentToken?: string) {
+    const activeToken = currentToken || token;
+    if (!activeToken) return;
+
+    try {
+      setRefreshing(true);
+      setErrorMessage("");
+
+      const taskList = await getTasks(activeToken, {
+        done: doneFilter,
+        priority: priorityFilter,
+        due_before: dueBeforeFilter,
+      });
+
+      setTasks(taskList);
+    } catch (error) {
+      if (error instanceof Error) {
+        setErrorMessage(error.message);
+      } else {
+        setErrorMessage("刷新失败");
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  }
+
   async function handleCreateTask(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -79,18 +117,19 @@ export default function TasksPage() {
     setErrorMessage("");
 
     try {
-      const newTask = await createTask(token, {
+      await createTask(token, {
         title,
         description,
         priority,
         due_date: dueDate ? dueDate : null,
       });
 
-      setTasks((prev) => [newTask, ...prev]);
       setTitle("");
       setDescription("");
       setPriority("medium");
       setDueDate("");
+
+      await refreshTasks(token);
     } catch (error) {
       if (error instanceof Error) {
         setErrorMessage(error.message);
@@ -106,13 +145,11 @@ export default function TasksPage() {
     if (!token) return;
 
     try {
-      const updatedTask = await updateTask(token, task.id, {
+      await updateTask(token, task.id, {
         done: !task.done,
       });
 
-      setTasks((prev) =>
-        prev.map((item) => (item.id === task.id ? updatedTask : item))
-      );
+      await refreshTasks(token);
     } catch (error) {
       if (error instanceof Error) {
         setErrorMessage(error.message);
@@ -127,13 +164,78 @@ export default function TasksPage() {
 
     try {
       await deleteTask(token, taskId);
-      setTasks((prev) => prev.filter((task) => task.id !== taskId));
+      await refreshTasks(token);
     } catch (error) {
       if (error instanceof Error) {
         setErrorMessage(error.message);
       } else {
         setErrorMessage("删除任务失败");
       }
+    }
+  }
+
+  function startEditing(task: Task) {
+    setEditingTaskId(task.id);
+    setEditTitle(task.title);
+    setEditDescription(task.description || "");
+    setEditPriority(task.priority);
+    setEditDueDate(task.due_date || "");
+  }
+
+  function cancelEditing() {
+    setEditingTaskId(null);
+    setEditTitle("");
+    setEditDescription("");
+    setEditPriority("medium");
+    setEditDueDate("");
+  }
+
+  async function handleSaveEdit(taskId: number) {
+    if (!token) return;
+
+    try {
+      await updateTask(token, taskId, {
+        title: editTitle,
+        description: editDescription,
+        priority: editPriority,
+        due_date: editDueDate ? editDueDate : null,
+      });
+
+      cancelEditing();
+      await refreshTasks(token);
+    } catch (error) {
+      if (error instanceof Error) {
+        setErrorMessage(error.message);
+      } else {
+        setErrorMessage("保存修改失败");
+      }
+    }
+  }
+
+  async function handleApplyFilters() {
+    await refreshTasks(token);
+  }
+
+  async function handleClearFilters() {
+    setDoneFilter("all");
+    setPriorityFilter("");
+    setDueBeforeFilter("");
+
+    if (!token) return;
+
+    try {
+      setRefreshing(true);
+      setErrorMessage("");
+      const taskList = await getTasks(token);
+      setTasks(taskList);
+    } catch (error) {
+      if (error instanceof Error) {
+        setErrorMessage(error.message);
+      } else {
+        setErrorMessage("清空筛选失败");
+      }
+    } finally {
+      setRefreshing(false);
     }
   }
 
@@ -153,7 +255,7 @@ export default function TasksPage() {
 
   return (
     <main className="min-h-screen px-6 py-10">
-      <div className="mx-auto max-w-5xl">
+      <div className="mx-auto max-w-6xl">
         <div className="mb-8 flex flex-col gap-4 rounded-3xl bg-white p-8 shadow-xl md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-sm font-medium text-slate-500">Todo Dashboard</p>
@@ -162,165 +264,331 @@ export default function TasksPage() {
               <span className="ml-2">{currentUser?.username}</span>
             </h1>
             <p className="mt-2 text-slate-600">
-              你现在看到的是当前登录用户自己的任务列表。
+              你现在可以创建、筛选、编辑并管理自己的任务。
             </p>
           </div>
 
-          <button
-            onClick={handleLogout}
-            className="rounded-2xl bg-slate-900 px-5 py-3 font-medium text-white transition hover:bg-slate-700"
-          >
-            退出登录
-          </button>
+          <div className="flex flex-wrap gap-3">
+            <button
+              onClick={() => void refreshTasks()}
+              className="rounded-2xl bg-slate-100 px-5 py-3 font-medium text-slate-800 transition hover:bg-slate-200"
+            >
+              {refreshing ? "刷新中..." : "刷新列表"}
+            </button>
+
+            <button
+              onClick={handleLogout}
+              className="rounded-2xl bg-slate-900 px-5 py-3 font-medium text-white transition hover:bg-slate-700"
+            >
+              退出登录
+            </button>
+          </div>
         </div>
 
-        <div className="grid gap-8 lg:grid-cols-[380px_1fr]">
-          <section className="rounded-3xl bg-white p-6 shadow-xl">
-            <h2 className="text-2xl font-semibold text-slate-900">新建任务</h2>
-            <p className="mt-2 text-sm text-slate-600">
-              在这里创建一条属于当前用户的新任务。
-            </p>
+        <div className="grid gap-8 lg:grid-cols-[360px_1fr]">
+          <section className="space-y-8">
+            <div className="rounded-3xl bg-white p-6 shadow-xl">
+              <h2 className="text-2xl font-semibold text-slate-900">新建任务</h2>
+              <p className="mt-2 text-sm text-slate-600">
+                在这里创建一条属于当前用户的新任务。
+              </p>
 
-            <form className="mt-6 space-y-4" onSubmit={handleCreateTask}>
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  标题
-                </label>
-                <input
-                  type="text"
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-500"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="例如：Finish homework"
-                  required
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  描述
-                </label>
-                <textarea
-                  className="min-h-[120px] w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-500"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  placeholder="写一点任务说明"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  优先级
-                </label>
-                <select
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-500"
-                  value={priority}
-                  onChange={(e) => setPriority(e.target.value as PriorityLevel)}
-                >
-                  <option value="low">low</option>
-                  <option value="medium">medium</option>
-                  <option value="high">high</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  截止日期
-                </label>
-                <input
-                  type="date"
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-500"
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                />
-              </div>
-
-              {errorMessage ? (
-                <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">
-                  {errorMessage}
+              <form className="mt-6 space-y-4" onSubmit={handleCreateTask}>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
+                    标题
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-500"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="例如：Finish homework"
+                    required
+                  />
                 </div>
-              ) : null}
 
-              <button
-                type="submit"
-                disabled={submitting}
-                className="w-full rounded-2xl bg-slate-900 px-4 py-3 font-medium text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {submitting ? "创建中..." : "创建任务"}
-              </button>
-            </form>
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
+                    描述
+                  </label>
+                  <textarea
+                    className="min-h-[120px] w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-500"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="写一点任务说明"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
+                    优先级
+                  </label>
+                  <select
+                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-500"
+                    value={priority}
+                    onChange={(e) => setPriority(e.target.value as PriorityLevel)}
+                  >
+                    <option value="low">low</option>
+                    <option value="medium">medium</option>
+                    <option value="high">high</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
+                    截止日期
+                  </label>
+                  <input
+                    type="date"
+                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-500"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                  />
+                </div>
+
+                {errorMessage ? (
+                  <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">
+                    {errorMessage}
+                  </div>
+                ) : null}
+
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full rounded-2xl bg-slate-900 px-4 py-3 font-medium text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {submitting ? "创建中..." : "创建任务"}
+                </button>
+              </form>
+            </div>
+
+            <div className="rounded-3xl bg-white p-6 shadow-xl">
+              <h2 className="text-2xl font-semibold text-slate-900">筛选任务</h2>
+              <p className="mt-2 text-sm text-slate-600">
+                通过完成状态、优先级和截止日期过滤你的任务。
+              </p>
+
+              <div className="mt-6 space-y-4">
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
+                    完成状态
+                  </label>
+                  <select
+                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-500"
+                    value={doneFilter}
+                    onChange={(e) => setDoneFilter(e.target.value as DoneFilter)}
+                  >
+                    <option value="all">all</option>
+                    <option value="pending">pending</option>
+                    <option value="done">done</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
+                    优先级
+                  </label>
+                  <select
+                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-500"
+                    value={priorityFilter}
+                    onChange={(e) =>
+                      setPriorityFilter(e.target.value as "" | PriorityLevel)
+                    }
+                  >
+                    <option value="">all</option>
+                    <option value="low">low</option>
+                    <option value="medium">medium</option>
+                    <option value="high">high</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
+                    截止日期早于
+                  </label>
+                  <input
+                    type="date"
+                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-500"
+                    value={dueBeforeFilter}
+                    onChange={(e) => setDueBeforeFilter(e.target.value)}
+                  />
+                </div>
+
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => void handleApplyFilters()}
+                    className="flex-1 rounded-2xl bg-slate-900 px-4 py-3 font-medium text-white transition hover:bg-slate-700"
+                  >
+                    应用筛选
+                  </button>
+
+                  <button
+                    onClick={() => void handleClearFilters()}
+                    className="flex-1 rounded-2xl bg-slate-100 px-4 py-3 font-medium text-slate-800 transition hover:bg-slate-200"
+                  >
+                    清空筛选
+                  </button>
+                </div>
+              </div>
+            </div>
           </section>
 
           <section className="rounded-3xl bg-white p-6 shadow-xl">
             <div className="mb-6">
               <h2 className="text-2xl font-semibold text-slate-900">我的任务</h2>
               <p className="mt-2 text-sm text-slate-600">
-                这里只会显示当前登录用户自己的任务。
+                这里只显示当前登录用户自己的任务。
               </p>
             </div>
 
             {tasks.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-slate-500">
-                目前还没有任务，先在左边创建一条吧。
+                当前没有匹配条件的任务。
               </div>
             ) : (
               <div className="space-y-4">
-                {tasks.map((task) => (
-                  <article
-                    key={task.id}
-                    className="rounded-2xl border border-slate-200 p-5"
-                  >
-                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                      <div className="flex-1">
-                        <div className="mb-3 flex flex-wrap items-center gap-2">
-                          <span
-                            className={`rounded-full px-3 py-1 text-xs font-medium ${
-                              task.done
-                                ? "bg-green-100 text-green-700"
-                                : "bg-amber-100 text-amber-700"
-                            }`}
-                          >
-                            {task.done ? "done" : "pending"}
-                          </span>
+                {tasks.map((task) => {
+                  const isEditing = editingTaskId === task.id;
 
-                          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
-                            {task.priority}
-                          </span>
+                  return (
+                    <article
+                      key={task.id}
+                      className="rounded-2xl border border-slate-200 p-5"
+                    >
+                      {isEditing ? (
+                        <div className="space-y-4">
+                          <div>
+                            <label className="mb-2 block text-sm font-medium text-slate-700">
+                              标题
+                            </label>
+                            <input
+                              type="text"
+                              className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-500"
+                              value={editTitle}
+                              onChange={(e) => setEditTitle(e.target.value)}
+                            />
+                          </div>
 
-                          {task.due_date ? (
-                            <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">
-                              due: {task.due_date}
-                            </span>
-                          ) : null}
+                          <div>
+                            <label className="mb-2 block text-sm font-medium text-slate-700">
+                              描述
+                            </label>
+                            <textarea
+                              className="min-h-[100px] w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-500"
+                              value={editDescription}
+                              onChange={(e) => setEditDescription(e.target.value)}
+                            />
+                          </div>
+
+                          <div className="grid gap-4 md:grid-cols-2">
+                            <div>
+                              <label className="mb-2 block text-sm font-medium text-slate-700">
+                                优先级
+                              </label>
+                              <select
+                                className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-500"
+                                value={editPriority}
+                                onChange={(e) =>
+                                  setEditPriority(e.target.value as PriorityLevel)
+                                }
+                              >
+                                <option value="low">low</option>
+                                <option value="medium">medium</option>
+                                <option value="high">high</option>
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="mb-2 block text-sm font-medium text-slate-700">
+                                截止日期
+                              </label>
+                              <input
+                                type="date"
+                                className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-500"
+                                value={editDueDate}
+                                onChange={(e) => setEditDueDate(e.target.value)}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="flex gap-3">
+                            <button
+                              onClick={() => void handleSaveEdit(task.id)}
+                              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+                            >
+                              保存修改
+                            </button>
+
+                            <button
+                              onClick={cancelEditing}
+                              className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-800 transition hover:bg-slate-200"
+                            >
+                              取消
+                            </button>
+                          </div>
                         </div>
+                      ) : (
+                        <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                          <div className="flex-1">
+                            <div className="mb-3 flex flex-wrap items-center gap-2">
+                              <span
+                                className={`rounded-full px-3 py-1 text-xs font-medium ${
+                                  task.done
+                                    ? "bg-green-100 text-green-700"
+                                    : "bg-amber-100 text-amber-700"
+                                }`}
+                              >
+                                {task.done ? "done" : "pending"}
+                              </span>
 
-                        <h3 className="text-xl font-semibold text-slate-900">
-                          {task.title}
-                        </h3>
+                              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                                {task.priority}
+                              </span>
 
-                        <p className="mt-2 whitespace-pre-wrap text-slate-600">
-                          {task.description || "No description"}
-                        </p>
-                      </div>
+                              {task.due_date ? (
+                                <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">
+                                  due: {task.due_date}
+                                </span>
+                              ) : null}
+                            </div>
 
-                      <div className="flex gap-3">
-                        <button
-                          onClick={() => handleToggleDone(task)}
-                          className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-800 transition hover:bg-slate-200"
-                        >
-                          {task.done ? "标记未完成" : "标记完成"}
-                        </button>
+                            <h3 className="text-xl font-semibold text-slate-900">
+                              {task.title}
+                            </h3>
 
-                        <button
-                          onClick={() => handleDeleteTask(task.id)}
-                          className="rounded-xl bg-red-100 px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-200"
-                        >
-                          删除
-                        </button>
-                      </div>
-                    </div>
-                  </article>
-                ))}
+                            <p className="mt-2 whitespace-pre-wrap text-slate-600">
+                              {task.description || "No description"}
+                            </p>
+                          </div>
+
+                          <div className="flex flex-wrap gap-3">
+                            <button
+                              onClick={() => void handleToggleDone(task)}
+                              className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-800 transition hover:bg-slate-200"
+                            >
+                              {task.done ? "标记未完成" : "标记完成"}
+                            </button>
+
+                            <button
+                              onClick={() => startEditing(task)}
+                              className="rounded-xl bg-blue-100 px-4 py-2 text-sm font-medium text-blue-700 transition hover:bg-blue-200"
+                            >
+                              编辑
+                            </button>
+
+                            <button
+                              onClick={() => void handleDeleteTask(task.id)}
+                              className="rounded-xl bg-red-100 px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-200"
+                            >
+                              删除
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
               </div>
             )}
           </section>
