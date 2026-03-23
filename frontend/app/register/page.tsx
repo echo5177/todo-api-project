@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -14,19 +14,50 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
 
   const [loading, setLoading] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
 
+  useEffect(() => {
+    const token = localStorage.getItem("access_token");
+
+    if (token) {
+      router.push("/tasks");
+      return;
+    }
+
+    setCheckingAuth(false);
+  }, [router]);
+
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    const trimmedEmail = email.trim();
+    const trimmedUsername = username.trim();
+
+    if (!trimmedEmail || !trimmedUsername || !password) {
+      setErrorMessage("邮箱、用户名和密码都不能为空");
+      return;
+    }
+
+    if (trimmedUsername.length < 3) {
+      setErrorMessage("用户名至少 3 个字符");
+      return;
+    }
+
+    if (password.length < 6) {
+      setErrorMessage("密码至少 6 位");
+      return;
+    }
+
     setLoading(true);
     setErrorMessage("");
     setSuccessMessage("");
 
     try {
       await registerUser({
-        email,
-        username,
+        email: trimmedEmail,
+        username: trimmedUsername,
         password,
       });
 
@@ -45,6 +76,14 @@ export default function RegisterPage() {
     }
   }
 
+  if (checkingAuth) {
+    return (
+      <main className="flex min-h-screen items-center justify-center">
+        <p className="text-lg text-slate-600">正在检查登录状态...</p>
+      </main>
+    );
+  }
+
   return (
     <main className="flex min-h-screen items-center justify-center px-6 py-12">
       <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-xl">
@@ -54,7 +93,7 @@ export default function RegisterPage() {
           </Link>
           <h1 className="mt-4 text-3xl font-bold text-slate-900">创建账号</h1>
           <p className="mt-2 text-slate-600">
-            先注册一个账号，后面你就可以登录并使用自己的任务列表。
+            注册完成后，你就可以登录并使用自己的任务列表。
           </p>
         </div>
 

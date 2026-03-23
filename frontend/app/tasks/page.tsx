@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -40,7 +40,9 @@ export default function TasksPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [savingEdit, setSavingEdit] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   useEffect(() => {
     const storedToken = localStorage.getItem("access_token");
@@ -54,10 +56,25 @@ export default function TasksPage() {
     void initializePage(storedToken);
   }, [router]);
 
+  const stats = useMemo(() => {
+    const total = tasks.length;
+    const done = tasks.filter((task) => task.done).length;
+    const pending = tasks.filter((task) => !task.done).length;
+    const highPriority = tasks.filter((task) => task.priority === "high").length;
+
+    return {
+      total,
+      done,
+      pending,
+      highPriority,
+    };
+  }, [tasks]);
+
   async function initializePage(currentToken: string) {
     try {
       setLoading(true);
       setErrorMessage("");
+      setSuccessMessage("");
 
       const [user, taskList] = await Promise.all([
         getCurrentUser(currentToken),
@@ -89,6 +106,7 @@ export default function TasksPage() {
     try {
       setRefreshing(true);
       setErrorMessage("");
+      setSuccessMessage("");
 
       const taskList = await getTasks(activeToken, {
         done: doneFilter,
@@ -113,13 +131,23 @@ export default function TasksPage() {
 
     if (!token) return;
 
+    const trimmedTitle = title.trim();
+    const trimmedDescription = description.trim();
+
+    if (!trimmedTitle) {
+      setErrorMessage("任务标题不能为空");
+      setSuccessMessage("");
+      return;
+    }
+
     setSubmitting(true);
     setErrorMessage("");
+    setSuccessMessage("");
 
     try {
       await createTask(token, {
-        title,
-        description,
+        title: trimmedTitle,
+        description: trimmedDescription,
         priority,
         due_date: dueDate ? dueDate : null,
       });
@@ -128,6 +156,7 @@ export default function TasksPage() {
       setDescription("");
       setPriority("medium");
       setDueDate("");
+      setSuccessMessage("任务创建成功");
 
       await refreshTasks(token);
     } catch (error) {
@@ -145,10 +174,14 @@ export default function TasksPage() {
     if (!token) return;
 
     try {
+      setErrorMessage("");
+      setSuccessMessage("");
+
       await updateTask(token, task.id, {
         done: !task.done,
       });
 
+      setSuccessMessage(task.done ? "任务已标记为未完成" : "任务已标记为完成");
       await refreshTasks(token);
     } catch (error) {
       if (error instanceof Error) {
@@ -162,8 +195,17 @@ export default function TasksPage() {
   async function handleDeleteTask(taskId: number) {
     if (!token) return;
 
+    const confirmed = window.confirm("确定要删除这条任务吗？删除后无法恢复。");
+    if (!confirmed) {
+      return;
+    }
+
     try {
+      setErrorMessage("");
+      setSuccessMessage("");
+
       await deleteTask(token, taskId);
+      setSuccessMessage("任务删除成功");
       await refreshTasks(token);
     } catch (error) {
       if (error instanceof Error) {
@@ -180,6 +222,8 @@ export default function TasksPage() {
     setEditDescription(task.description || "");
     setEditPriority(task.priority);
     setEditDueDate(task.due_date || "");
+    setErrorMessage("");
+    setSuccessMessage("");
   }
 
   function cancelEditing() {
@@ -193,15 +237,29 @@ export default function TasksPage() {
   async function handleSaveEdit(taskId: number) {
     if (!token) return;
 
+    const trimmedTitle = editTitle.trim();
+    const trimmedDescription = editDescription.trim();
+
+    if (!trimmedTitle) {
+      setErrorMessage("编辑后的标题不能为空");
+      setSuccessMessage("");
+      return;
+    }
+
     try {
+      setSavingEdit(true);
+      setErrorMessage("");
+      setSuccessMessage("");
+
       await updateTask(token, taskId, {
-        title: editTitle,
-        description: editDescription,
+        title: trimmedTitle,
+        description: trimmedDescription,
         priority: editPriority,
         due_date: editDueDate ? editDueDate : null,
       });
 
       cancelEditing();
+      setSuccessMessage("任务修改成功");
       await refreshTasks(token);
     } catch (error) {
       if (error instanceof Error) {
@@ -209,6 +267,8 @@ export default function TasksPage() {
       } else {
         setErrorMessage("保存修改失败");
       }
+    } finally {
+      setSavingEdit(false);
     }
   }
 
@@ -226,8 +286,11 @@ export default function TasksPage() {
     try {
       setRefreshing(true);
       setErrorMessage("");
+      setSuccessMessage("");
+
       const taskList = await getTasks(token);
       setTasks(taskList);
+      setSuccessMessage("筛选条件已清空");
     } catch (error) {
       if (error instanceof Error) {
         setErrorMessage(error.message);
@@ -264,7 +327,7 @@ export default function TasksPage() {
               <span className="ml-2">{currentUser?.username}</span>
             </h1>
             <p className="mt-2 text-slate-600">
-              你现在可以创建、筛选、编辑并管理自己的任务。
+              今天继续把这个网站打磨得更像一个正式产品。
             </p>
           </div>
 
@@ -284,6 +347,42 @@ export default function TasksPage() {
             </button>
           </div>
         </div>
+
+        <div className="mb-8 grid gap-4 md:grid-cols-4">
+          <div className="rounded-3xl bg-white p-6 shadow-xl">
+            <p className="text-sm text-slate-500">总任务数</p>
+            <p className="mt-3 text-3xl font-bold text-slate-900">{stats.total}</p>
+          </div>
+
+          <div className="rounded-3xl bg-white p-6 shadow-xl">
+            <p className="text-sm text-slate-500">未完成</p>
+            <p className="mt-3 text-3xl font-bold text-amber-600">{stats.pending}</p>
+          </div>
+
+          <div className="rounded-3xl bg-white p-6 shadow-xl">
+            <p className="text-sm text-slate-500">已完成</p>
+            <p className="mt-3 text-3xl font-bold text-green-600">{stats.done}</p>
+          </div>
+
+          <div className="rounded-3xl bg-white p-6 shadow-xl">
+            <p className="text-sm text-slate-500">高优先级</p>
+            <p className="mt-3 text-3xl font-bold text-red-600">
+              {stats.highPriority}
+            </p>
+          </div>
+        </div>
+
+        {errorMessage ? (
+          <div className="mb-6 rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">
+            {errorMessage}
+          </div>
+        ) : null}
+
+        {successMessage ? (
+          <div className="mb-6 rounded-2xl bg-green-50 px-4 py-3 text-sm text-green-700">
+            {successMessage}
+          </div>
+        ) : null}
 
         <div className="grid gap-8 lg:grid-cols-[360px_1fr]">
           <section className="space-y-8">
@@ -346,12 +445,6 @@ export default function TasksPage() {
                     onChange={(e) => setDueDate(e.target.value)}
                   />
                 </div>
-
-                {errorMessage ? (
-                  <div className="rounded-2xl bg-red-50 px-4 py-3 text-sm text-red-700">
-                    {errorMessage}
-                  </div>
-                ) : null}
 
                 <button
                   type="submit"
@@ -515,14 +608,16 @@ export default function TasksPage() {
                           <div className="flex gap-3">
                             <button
                               onClick={() => void handleSaveEdit(task.id)}
-                              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700"
+                              disabled={savingEdit}
+                              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-60"
                             >
-                              保存修改
+                              {savingEdit ? "保存中..." : "保存修改"}
                             </button>
 
                             <button
                               onClick={cancelEditing}
-                              className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-800 transition hover:bg-slate-200"
+                              disabled={savingEdit}
+                              className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-medium text-slate-800 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-60"
                             >
                               取消
                             </button>

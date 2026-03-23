@@ -21,11 +21,16 @@ export type User = {
   is_active: boolean;
 };
 
+export type TokenResponse = {
+  access_token: string;
+  token_type: string;
+};
+
 export async function registerUser(data: {
   email: string;
   username: string;
   password: string;
-}) {
+}): Promise<User> {
   const response = await fetch(`${API_BASE_URL}/auth/register`, {
     method: "POST",
     headers: {
@@ -34,13 +39,13 @@ export async function registerUser(data: {
     body: JSON.stringify(data),
   });
 
-  return handleResponse(response);
+  return handleResponse<User>(response);
 }
 
 export async function loginUser(data: {
   username: string;
   password: string;
-}) {
+}): Promise<TokenResponse> {
   const formData = new URLSearchParams();
   formData.append("username", data.username);
   formData.append("password", data.password);
@@ -53,7 +58,7 @@ export async function loginUser(data: {
     body: formData.toString(),
   });
 
-  return handleResponse(response);
+  return handleResponse<TokenResponse>(response);
 }
 
 export async function getCurrentUser(token: string): Promise<User> {
@@ -63,7 +68,7 @@ export async function getCurrentUser(token: string): Promise<User> {
     },
   });
 
-  return handleResponse(response);
+  return handleResponse<User>(response);
 }
 
 export async function getTasks(
@@ -101,7 +106,7 @@ export async function getTasks(
     },
   });
 
-  return handleResponse(response);
+  return handleResponse<Task[]>(response);
 }
 
 export async function createTask(
@@ -122,7 +127,7 @@ export async function createTask(
     body: JSON.stringify(data),
   });
 
-  return handleResponse(response);
+  return handleResponse<Task>(response);
 }
 
 export async function updateTask(
@@ -145,10 +150,13 @@ export async function updateTask(
     body: JSON.stringify(data),
   });
 
-  return handleResponse(response);
+  return handleResponse<Task>(response);
 }
 
-export async function deleteTask(token: string, taskId: number) {
+export async function deleteTask(
+  token: string,
+  taskId: number
+): Promise<{ message: string }> {
   const response = await fetch(`${API_BASE_URL}/tasks/${taskId}`, {
     method: "DELETE",
     headers: {
@@ -156,10 +164,10 @@ export async function deleteTask(token: string, taskId: number) {
     },
   });
 
-  return handleResponse(response);
+  return handleResponse<{ message: string }>(response);
 }
 
-async function handleResponse(response: Response) {
+async function handleResponse<T>(response: Response): Promise<T> {
   const contentType = response.headers.get("content-type");
 
   let data: unknown = null;
@@ -179,5 +187,5 @@ async function handleResponse(response: Response) {
     throw new Error(detail);
   }
 
-  return data;
+  return data as T;
 }

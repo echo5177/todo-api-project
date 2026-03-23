@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -13,24 +13,42 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
 
   const [loading, setLoading] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
+
+  useEffect(() => {
+    const token = localStorage.getItem("access_token");
+
+    if (token) {
+      router.push("/tasks");
+      return;
+    }
+
+    setCheckingAuth(false);
+  }, [router]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    const trimmedUsername = username.trim();
+
+    if (!trimmedUsername || !password) {
+      setErrorMessage("用户名和密码都不能为空");
+      return;
+    }
+
     setLoading(true);
     setErrorMessage("");
 
     try {
-      const result = (await loginUser({
-        username,
-        password,
-      })) as {
-        access_token: string;
-        token_type: string;
-      };
+    const result = await loginUser({
+      username: trimmedUsername,
+      password,
+    });
+
 
       localStorage.setItem("access_token", result.access_token);
-      localStorage.setItem("username", username);
+      localStorage.setItem("username", trimmedUsername);
 
       router.push("/tasks");
     } catch (error) {
@@ -44,6 +62,14 @@ export default function LoginPage() {
     }
   }
 
+  if (checkingAuth) {
+    return (
+      <main className="flex min-h-screen items-center justify-center">
+        <p className="text-lg text-slate-600">正在检查登录状态...</p>
+      </main>
+    );
+  }
+
   return (
     <main className="flex min-h-screen items-center justify-center px-6 py-12">
       <div className="w-full max-w-md rounded-3xl bg-white p-8 shadow-xl">
@@ -53,7 +79,7 @@ export default function LoginPage() {
           </Link>
           <h1 className="mt-4 text-3xl font-bold text-slate-900">登录</h1>
           <p className="mt-2 text-slate-600">
-            登录后进入你的任务列表页面。
+            登录后进入你的任务工作台。
           </p>
         </div>
 
