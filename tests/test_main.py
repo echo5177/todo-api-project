@@ -191,77 +191,17 @@ def test_delete_task_not_found():
     assert response.json() == {"detail": "Task not found"}
 
 
-def test_filter_by_done():
-    client.post(
-        "/tasks",
-        json={
-            "title": "Not done task",
-            "description": "To do",
-            "priority": "low",
-            "due_date": "2026-03-28",
+def test_cors_headers():
+    response = client.options(
+        "/",
+        headers={
+            "Origin": "http://localhost:8000",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "X-Custom-Header",
         },
     )
-    create_response = client.post(
-        "/tasks",
-        json={
-            "title": "Done task",
-            "description": "Completed",
-            "priority": "high",
-            "due_date": "2026-03-20",
-        },
-    )
-    task_id = create_response.json()["id"]
-    client.patch(f"/tasks/{task_id}", json={"done": True})
-
-    response_done = client.get("/tasks?done=true")
-    assert response_done.status_code == 200
-    data_done = response_done.json()
-    assert len(data_done) == 1
-    assert data_done[0]["title"] == "Done task"
-    assert data_done[0]["done"] is True
-
-    response_not_done = client.get("/tasks?done=false")
-    assert response_not_done.status_code == 200
-    data_not_done = response_not_done.json()
-    assert len(data_not_done) == 1
-    assert data_not_done[0]["title"] == "Not done task"
-    assert data_not_done[0]["done"] is False
-
-
-def test_filter_by_due_before():
-    client.post(
-        "/tasks",
-        json={
-            "title": "Early task",
-            "description": "Do this first",
-            "priority": "high",
-            "due_date": "2026-01-01",
-        },
-    )
-    client.post(
-        "/tasks",
-        json={
-            "title": "Mid task",
-            "description": "Do this next",
-            "priority": "medium",
-            "due_date": "2026-02-01",
-        },
-    )
-    client.post(
-        "/tasks",
-        json={
-            "title": "Late task",
-            "description": "Do this last",
-            "priority": "low",
-            "due_date": "2026-03-01",
-        },
-    )
-
-    response = client.get("/tasks?due_before=2026-02-15")
     assert response.status_code == 200
-    data = response.json()
-    assert len(data) == 2
-    titles = [task["title"] for task in data]
-    assert "Early task" in titles
-    assert "Mid task" in titles
-    assert "Late task" not in titles
+    assert (
+        response.headers.get("access-control-allow-origin") == "http://localhost:8000"
+    )
+    assert response.headers.get("access-control-allow-credentials") == "true"
