@@ -189,3 +189,19 @@ def test_delete_task_not_found():
     response = client.delete("/tasks/9999")
     assert response.status_code == 404
     assert response.json() == {"detail": "Task not found"}
+
+
+def test_cors_headers():
+    response = client.options(
+        "/",
+        headers={
+            "Origin": "http://localhost:8000",
+            "Access-Control-Request-Method": "GET",
+            "Access-Control-Request-Headers": "X-Custom-Header",
+        },
+    )
+    assert response.status_code == 200
+    assert (
+        response.headers.get("access-control-allow-origin") == "http://localhost:8000"
+    )
+    assert response.headers.get("access-control-allow-credentials") == "true"
