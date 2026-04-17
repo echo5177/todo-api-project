@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from typing import Annotated, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Query
@@ -5,7 +6,14 @@ from pydantic import BaseModel
 from pydantic import Field as PydanticField
 from sqlmodel import Field, Session, SQLModel, create_engine, select
 
-app = FastAPI(title="My Todo API")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    create_db_and_tables()
+    yield
+
+
+app = FastAPI(title="My Todo API", lifespan=lifespan)
 
 sqlite_file_name = "database.db"
 sqlite_url = f"sqlite:///{sqlite_file_name}"
@@ -41,11 +49,6 @@ def get_session():
 
 
 SessionDep = Annotated[Session, Depends(get_session)]
-
-
-@app.on_event("startup")
-def on_startup():
-    create_db_and_tables()
 
 
 @app.get("/")
