@@ -30,6 +30,7 @@ def list_tasks(
     done: Optional[bool] = Query(default=None),
     priority: Optional[PriorityLevel] = Query(default=None),
     due_before: Optional[date] = Query(default=None),
+    title: Optional[str] = Query(default=None),
 ):
     statement = select(Task).where(Task.owner_id == current_user.id)
 
@@ -41,6 +42,9 @@ def list_tasks(
 
     if due_before is not None:
         statement = statement.where(Task.due_date <= due_before)
+
+    if title is not None:
+        statement = statement.where(Task.title.contains(title))
 
     tasks = session.exec(statement).all()
     return tasks

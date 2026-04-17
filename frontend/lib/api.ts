@@ -77,6 +77,7 @@ export async function getTasks(
     done?: DoneFilter;
     priority?: "" | PriorityLevel;
     due_before?: string;
+    title?: string;
   }
 ): Promise<Task[]> {
   const query = new URLSearchParams();
@@ -93,6 +94,10 @@ export async function getTasks(
 
   if (filters?.due_before) {
     query.append("due_before", filters.due_before);
+  }
+
+  if (filters?.title) {
+    query.append("title", filters.title);
   }
 
   const queryString = query.toString();

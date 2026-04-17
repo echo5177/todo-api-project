@@ -30,6 +30,7 @@ export default function TasksPage() {
   const [doneFilter, setDoneFilter] = useState<DoneFilter>("all");
   const [priorityFilter, setPriorityFilter] = useState<"" | PriorityLevel>("");
   const [dueBeforeFilter, setDueBeforeFilter] = useState("");
+  const [titleFilter, setTitleFilter] = useState("");
 
   const [editingTaskId, setEditingTaskId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState("");
@@ -54,6 +55,7 @@ export default function TasksPage() {
 
     setToken(storedToken);
     void initializePage(storedToken);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
   const stats = useMemo(() => {
@@ -112,6 +114,7 @@ export default function TasksPage() {
         done: doneFilter,
         priority: priorityFilter,
         due_before: dueBeforeFilter,
+        title: titleFilter,
       });
 
       setTasks(taskList);
@@ -280,6 +283,7 @@ export default function TasksPage() {
     setDoneFilter("all");
     setPriorityFilter("");
     setDueBeforeFilter("");
+    setTitleFilter("");
 
     if (!token) return;
 
@@ -463,6 +467,19 @@ export default function TasksPage() {
               </p>
 
               <div className="mt-6 space-y-4">
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
+                    标题搜索
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 outline-none transition focus:border-slate-500"
+                    value={titleFilter}
+                    onChange={(e) => setTitleFilter(e.target.value)}
+                    placeholder="按标题搜索"
+                  />
+                </div>
+
                 <div>
                   <label className="mb-2 block text-sm font-medium text-slate-700">
                     完成状态
