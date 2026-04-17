@@ -46,12 +46,7 @@ def get_task(task_id: int, session: SessionDep):
 
 @router.post("")
 def create_task(task: TaskCreate, session: SessionDep):
-    db_task = Task(
-        title=task.title,
-        description=task.description,
-        priority=task.priority,
-        due_date=task.due_date,
-    )
+    db_task = Task.model_validate(task)
     session.add(db_task)
     session.commit()
     session.refresh(db_task)
