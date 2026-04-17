@@ -1,3 +1,8 @@
+import os
+
+os.environ["API_KEY"] = "default-secret-key"
+import os
+
 from fastapi.testclient import TestClient
 from sqlmodel import Session, SQLModel, create_engine
 
@@ -18,6 +23,7 @@ app.dependency_overrides[get_session] = override_get_session
 SQLModel.metadata.create_all(engine)
 
 client = TestClient(app)
+client.headers.update({"X-API-Key": "default-secret-key"})
 
 
 def setup_function():
@@ -189,3 +195,18 @@ def test_delete_task_not_found():
     response = client.delete("/tasks/9999")
     assert response.status_code == 404
     assert response.json() == {"detail": "Task not found"}
+
+
+def test_unauthorized_access():
+    unauth_client = TestClient(app)
+    response = unauth_client.get("/tasks")
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Not authenticated"}
+
+
+def test_invalid_api_key():
+    invalid_client = TestClient(app)
+    invalid_client.headers.update({"X-API-Key": "wrong-key"})
+    response = invalid_client.get("/tasks")
+    assert response.status_code == 401
+    assert response.json() == {"detail": "Invalid API Key"}
