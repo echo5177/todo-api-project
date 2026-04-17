@@ -183,3 +183,9 @@ def test_invalid_due_date_should_fail():
         },
     )
     assert response.status_code == 422
+
+
+def test_delete_task_not_found():
+    response = client.delete("/tasks/9999")
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Task not found"}
