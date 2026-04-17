@@ -59,16 +59,9 @@ def update_task(task_id: int, task_update: TaskUpdate, session: SessionDep):
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
 
-    if task_update.title is not None:
-        task.title = task_update.title
-    if task_update.description is not None:
-        task.description = task_update.description
-    if task_update.done is not None:
-        task.done = task_update.done
-    if task_update.priority is not None:
-        task.priority = task_update.priority
-    if task_update.due_date is not None:
-        task.due_date = task_update.due_date
+    update_data = task_update.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(task, key, value)
 
     session.add(task)
     session.commit()
