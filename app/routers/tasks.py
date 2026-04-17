@@ -17,6 +17,8 @@ SessionDep = Annotated[Session, Depends(get_session)]
 @router.get("")
 def list_tasks(
     session: SessionDep,
+    offset: int = 0,
+    limit: Annotated[int, Query(le=100)] = 100,
     done: Optional[bool] = Query(default=None),
     priority: Optional[PriorityLevel] = Query(default=None),
     due_before: Optional[date] = Query(default=None),
@@ -32,6 +34,7 @@ def list_tasks(
     if due_before is not None:
         statement = statement.where(Task.due_date <= due_before)
 
+    statement = statement.offset(offset).limit(limit)
     tasks = session.exec(statement).all()
     return tasks
 

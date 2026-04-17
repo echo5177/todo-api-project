@@ -189,3 +189,35 @@ def test_delete_task_not_found():
     response = client.delete("/tasks/9999")
     assert response.status_code == 404
     assert response.json() == {"detail": "Task not found"}
+
+
+def test_list_tasks_pagination():
+    # Create multiple tasks
+    for i in range(15):
+        client.post(
+            "/tasks",
+            json={
+                "title": f"Pagination Task {i}",
+                "description": "Testing limits",
+                "priority": "low",
+                "due_date": "2026-03-28",
+            },
+        )
+
+    # Test limit
+    response = client.get("/tasks?limit=5")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 5
+
+    # Test offset
+    response2 = client.get("/tasks?limit=5&offset=5")
+    assert response2.status_code == 200
+    data2 = response2.json()
+    assert len(data2) == 5
+    assert data[0]["id"] != data2[0]["id"]
+
+
+def test_list_tasks_limit_exceeded():
+    response = client.get("/tasks?limit=101")
+    assert response.status_code == 422
