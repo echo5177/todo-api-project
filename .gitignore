@@ -36,4 +36,6 @@ Thumbs.db
 .Spotlight-V100
 .Trashes
 ehthumbs.db
-Thumbs.db
+Thumbs.db__pycache__/
+*.pyc
+*.db
