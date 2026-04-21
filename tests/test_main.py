@@ -205,3 +205,31 @@ def test_cors_headers():
         response.headers.get("access-control-allow-origin") == "http://localhost:8000"
     )
     assert response.headers.get("access-control-allow-credentials") == "true"
+
+
+def test_filter_by_due_before():
+    client.post(
+        "/tasks",
+        json={
+            "title": "Early task",
+            "description": "Due early",
+            "priority": "medium",
+            "due_date": "2026-03-20",
+        },
+    )
+    client.post(
+        "/tasks",
+        json={
+            "title": "Late task",
+            "description": "Due late",
+            "priority": "medium",
+            "due_date": "2026-03-30",
+        },
+    )
+
+    response = client.get("/tasks?due_before=2026-03-25")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["title"] == "Early task"
+    assert data[0]["due_date"] == "2026-03-20"
