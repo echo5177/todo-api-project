@@ -5,7 +5,7 @@ A simple Todo API project built with FastAPI.
 ## Run
 
 ```bash
-fastapi dev main.py
+fastapi dev app/main.py
 ```
 
 API Docs
@@ -29,6 +29,10 @@ Features
 * Delete a task
 
 * Filter tasks by done status
+
+* Register and log in users
+
+* Keep each user's tasks private
 
 Database
 --------
@@ -63,5 +67,9 @@ ruff format .
 - Delete a task
 - Filter tasks by done status
 - Filter tasks by priority
+- Filter tasks by title
+- Filter tasks by due date
+- Paginate task lists with limit and offset
 - Support task priority: low / medium / high
 - Support optional due date
+- JWT-based user registration and login
