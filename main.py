@@ -54,10 +54,16 @@ def read_root():
 
 
 @app.get("/tasks")
-def list_tasks(session: SessionDep, done: Optional[bool] = Query(default=None)):
+def list_tasks(
+    session: SessionDep,
+    offset: int = 0,
+    limit: Annotated[int, Query(le=100)] = 100,
+    done: Optional[bool] = Query(default=None),
+):
     statement = select(Task)
     if done is not None:
         statement = statement.where(Task.done == done)
+    statement = statement.offset(offset).limit(limit)
     tasks = session.exec(statement).all()
     return tasks
 
