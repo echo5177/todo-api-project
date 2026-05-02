@@ -1,7 +1,9 @@
+import os
 from datetime import date
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Security, status
+from fastapi.security import APIKeyHeader
 from sqlmodel import Session, select
 
 from app.database import get_session
@@ -9,8 +11,21 @@ from app.enums import PriorityLevel
 from app.models import Task
 from app.schemas import TaskCreate, TaskUpdate
 
-router = APIRouter(prefix="/tasks", tags=["tasks"])
+api_key_header = APIKeyHeader(name="X-API-Key")
 
+
+def get_api_key(api_key: str = Security(api_key_header)):
+
+    expected_api_key = os.environ.get("API_KEY")
+    if not expected_api_key or api_key != expected_api_key:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid API Key",
+        )
+    return api_key
+
+
+router = APIRouter(prefix="/tasks", tags=["tasks"], dependencies=[Depends(get_api_key)])
 SessionDep = Annotated[Session, Depends(get_session)]
 
 
