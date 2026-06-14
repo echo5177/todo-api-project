@@ -16,6 +16,17 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     return password_hash.verify(plain_password, hashed_password)
 
 
+# Pre-computed hash of a dummy password. Verifying against it lets the login
+# flow spend the same amount of time whether or not a username exists, which
+# prevents attackers from enumerating valid usernames via response timing.
+_DUMMY_PASSWORD_HASH = password_hash.hash("dummy-password-for-timing")
+
+
+def dummy_verify_password() -> None:
+    """Run a password verification to equalize timing for unknown users."""
+    password_hash.verify("dummy-password-for-timing", _DUMMY_PASSWORD_HASH)
+
+
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     to_encode = data.copy()
     if expires_delta is None:
@@ -27,4 +38,9 @@ def create_access_token(data: dict, expires_delta: timedelta | None = None) -> s
 
 
 def decode_access_token(token: str) -> dict:
-    return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    return jwt.decode(
+        token,
+        SECRET_KEY,
+        algorithms=[ALGORITHM],
+        options={"require": ["exp"], "verify_exp": True},
+    )

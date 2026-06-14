@@ -177,3 +177,74 @@ def test_get_current_user_with_valid_token():
     data = response.json()
     assert data["username"] == "alice"
     assert data["email"] == "alice@example.com"
+
+
+def test_inactive_user_cannot_authenticate():
+    client.post(
+        "/auth/register",
+        json={
+            "email": "alice@example.com",
+            "username": "alice",
+            "password": "secret123",
+        },
+    )
+
+    login_response = client.post(
+        "/auth/token",
+        data={
+            "username": "alice",
+            "password": "secret123",
+        },
+    )
+    token = login_response.json()["access_token"]
+
+    with Session(engine) as session:
+        user = session.exec(select(User).where(User.username == "alice")).first()
+        user.is_active = False
+        session.add(user)
+        session.commit()
+
+    response = client.get(
+        "/auth/me",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Inactive user"
+
+
+def test_unknown_username_is_rejected_like_wrong_password():
+    response = client.post(
+        "/auth/token",
+        data={
+            "username": "ghost",
+            "password": "whatever",
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Incorrect username or password"
+
+
+def test_token_signed_with_other_key_is_rejected():
+    import jwt
+
+    client.post(
+        "/auth/register",
+        json={
+            "email": "alice@example.com",
+            "username": "alice",
+            "password": "secret123",
+        },
+    )
+
+    forged_token = jwt.encode(
+        {"sub": "alice"}, "attacker-guessed-key-that-is-long-enough", algorithm="HS256"
+    )
+
+    response = client.get(
+        "/auth/me",
+        headers={"Authorization": f"Bearer {forged_token}"},
+    )
+
+    assert response.status_code == 401
