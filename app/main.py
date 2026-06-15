@@ -32,3 +32,8 @@ app.include_router(tasks_router)
 @app.get("/")
 def read_root():
     return {"message": "Todo API is running"}
+
+
+@app.get("/health", tags=["meta"])
+def health_check():
+    return {"status": "ok"}

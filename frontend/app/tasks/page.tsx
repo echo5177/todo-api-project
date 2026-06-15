@@ -58,6 +58,14 @@ export default function TasksPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
+  const todayString = useMemo(() => {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }, []);
+
   const stats = useMemo(() => {
     const total = tasks.length;
     const done = tasks.filter((task) => task.done).length;
@@ -560,6 +568,10 @@ export default function TasksPage() {
               <div className="space-y-4">
                 {tasks.map((task) => {
                   const isEditing = editingTaskId === task.id;
+                  const isOverdue =
+                    !task.done &&
+                    task.due_date !== null &&
+                    task.due_date < todayString;
 
                   return (
                     <article
@@ -659,8 +671,20 @@ export default function TasksPage() {
                               </span>
 
                               {task.due_date ? (
-                                <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-medium text-blue-700">
+                                <span
+                                  className={`rounded-full px-3 py-1 text-xs font-medium ${
+                                    isOverdue
+                                      ? "bg-red-100 text-red-700"
+                                      : "bg-blue-100 text-blue-700"
+                                  }`}
+                                >
                                   due: {task.due_date}
+                                </span>
+                              ) : null}
+
+                              {isOverdue ? (
+                                <span className="rounded-full bg-red-600 px-3 py-1 text-xs font-medium text-white">
+                                  已逾期
                                 </span>
                               ) : null}
                             </div>

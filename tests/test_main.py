@@ -70,7 +70,7 @@ def test_create_task():
         headers=auth_headers(token),
     )
 
-    assert response.status_code == 200
+    assert response.status_code == 201
     data = response.json()
     assert data["title"] == "Test task"
     assert data["description"] == "Testing create"
@@ -78,6 +78,10 @@ def test_create_task():
     assert data["priority"] == "high"
     assert data["due_date"] == "2026-03-30"
     assert "id" in data
+    assert "created_at" in data
+    assert "updated_at" in data
+    # The public task schema must never leak internal ownership wiring.
+    assert "owner_id" not in data
 
 
 def test_list_tasks():
@@ -423,3 +427,75 @@ def test_user_can_only_see_own_tasks():
 def test_unauthenticated_user_cannot_access_tasks():
     response = client.get("/tasks")
     assert response.status_code == 401
+
+
+def test_list_orders_pending_by_due_date_then_undated_last():
+    register_user("alice@example.com", "alice", "secret123")
+    token = login_user("alice", "secret123")
+
+    def create(title, due_date=None):
+        client.post(
+            "/tasks",
+            json={"title": title, "due_date": due_date},
+            headers=auth_headers(token),
+        )
+
+    create("No due date")
+    create("Due late", "2026-04-10")
+    create("Due soon", "2026-04-01")
+
+    response = client.get("/tasks", headers=auth_headers(token))
+    assert response.status_code == 200
+    titles = [task["title"] for task in response.json()]
+    assert titles == ["Due soon", "Due late", "No due date"]
+
+
+def test_completed_tasks_sort_after_pending():
+    register_user("alice@example.com", "alice", "secret123")
+    token = login_user("alice", "secret123")
+
+    create_response = client.post(
+        "/tasks",
+        json={"title": "Will be done"},
+        headers=auth_headers(token),
+    )
+    done_id = create_response.json()["id"]
+    client.post("/tasks", json={"title": "Still pending"}, headers=auth_headers(token))
+
+    client.patch(
+        f"/tasks/{done_id}",
+        json={"done": True},
+        headers=auth_headers(token),
+    )
+
+    response = client.get("/tasks", headers=auth_headers(token))
+    titles = [task["title"] for task in response.json()]
+    assert titles == ["Still pending", "Will be done"]
+
+
+def test_update_bumps_updated_at_timestamp():
+    register_user("alice@example.com", "alice", "secret123")
+    token = login_user("alice", "secret123")
+
+    create_response = client.post(
+        "/tasks",
+        json={"title": "Track timestamps"},
+        headers=auth_headers(token),
+    )
+    created = create_response.json()
+
+    update_response = client.patch(
+        f"/tasks/{created['id']}",
+        json={"title": "Track timestamps (edited)"},
+        headers=auth_headers(token),
+    )
+    updated = update_response.json()
+
+    assert updated["created_at"] == created["created_at"]
+    assert updated["updated_at"] >= created["updated_at"]
+
+
+def test_health_check():
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}

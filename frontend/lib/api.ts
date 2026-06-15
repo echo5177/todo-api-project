@@ -11,7 +11,8 @@ export type Task = {
   done: boolean;
   priority: PriorityLevel;
   due_date: string | null;
-  owner_id: number | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type User = {
