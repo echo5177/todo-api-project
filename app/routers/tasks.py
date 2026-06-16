@@ -1,14 +1,14 @@
 from datetime import date
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlmodel import Session, select
 
 from app.database import get_session
 from app.dependencies import get_current_user
 from app.enums import PriorityLevel
-from app.models import Task, User
-from app.schemas import TaskCreate, TaskUpdate
+from app.models import Task, User, utcnow
+from app.schemas import TaskCreate, TaskRead, TaskUpdate
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
@@ -23,7 +23,7 @@ def get_user_task_or_404(session: Session, current_user: User, task_id: int) -> 
     return task
 
 
-@router.get("")
+@router.get("", response_model=list[TaskRead])
 def list_tasks(
     session: SessionDep,
     current_user: CurrentUserDep,
@@ -48,16 +48,25 @@ def list_tasks(
     if title is not None:
         statement = statement.where(Task.title.contains(title))
 
+    # Deterministic, useful order: unfinished first, then by soonest due date
+    # (undated tasks last), and finally newest first as a stable tie-breaker.
+    statement = statement.order_by(
+        Task.done,
+        Task.due_date.is_(None),
+        Task.due_date,
+        Task.created_at.desc(),
+    )
+
     statement = statement.offset(offset).limit(limit)
     return session.exec(statement).all()
 
 
-@router.get("/{task_id}")
+@router.get("/{task_id}", response_model=TaskRead)
 def get_task(task_id: int, session: SessionDep, current_user: CurrentUserDep):
     return get_user_task_or_404(session, current_user, task_id)
 
 
-@router.post("")
+@router.post("", response_model=TaskRead, status_code=status.HTTP_201_CREATED)
 def create_task(task: TaskCreate, session: SessionDep, current_user: CurrentUserDep):
     db_task = Task.model_validate(task)
     db_task.owner_id = current_user.id
@@ -67,7 +76,7 @@ def create_task(task: TaskCreate, session: SessionDep, current_user: CurrentUser
     return db_task
 
 
-@router.patch("/{task_id}")
+@router.patch("/{task_id}", response_model=TaskRead)
 def update_task(
     task_id: int,
     task_update: TaskUpdate,
@@ -79,6 +88,9 @@ def update_task(
     update_data = task_update.model_dump(exclude_unset=True)
     for key, value in update_data.items():
         setattr(task, key, value)
+
+    if update_data:
+        task.updated_at = utcnow()
 
     session.add(task)
     session.commit()

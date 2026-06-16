@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 from typing import Optional
 
 from pydantic import BaseModel, EmailStr, Field
@@ -19,6 +19,20 @@ class TaskUpdate(BaseModel):
     done: Optional[bool] = None
     priority: Optional[PriorityLevel] = None
     due_date: Optional[date] = None
+
+
+class TaskRead(BaseModel):
+    """Public view of a task. Deliberately omits ``owner_id`` so the API never
+    leaks internal ownership wiring to clients."""
+
+    id: int
+    title: str
+    description: str
+    done: bool
+    priority: PriorityLevel
+    due_date: Optional[date]
+    created_at: datetime
+    updated_at: datetime
 
 
 class UserCreate(BaseModel):
